@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <tuple>
 #include <vector>
+#include <omp.h>
 
 #define NOMINMAX	//windows.h -> define min,max
 using namespace std;
@@ -263,7 +264,7 @@ struct Mat {
 		return res;
 	}
 
-    Mat  manual_mul(Mat& mat,Stat* stat = nullptr) {
+    Mat manual_mul(Mat& mat,Stat* stat = nullptr) {
         if(typeid(T) != typeid(float))
 			throw runtime_error("incorrect mat type");
 		if (width != mat.height)
@@ -352,6 +353,38 @@ struct Mat {
 		}
 		return res;
 	}
+
+	Mat omp_mul(Mat& mat,Stat* stat = nullptr){
+		if (width != mat.height)
+			throw runtime_error("mutrix sizes are not suitable");
+		Mat res(height,mat.width);
+		Mat tr_mat = mat.transposit();
+		T* res_row;
+		T* tr_row;
+		T* cur_row;
+		Timer t("omp mult");
+		if(stat != NULL){
+			t.start();
+		}
+		//const n threads
+		//omp_set_dynamic(0);
+		//omp_set_num_threads(8);
+		#pragma omp parallel for
+		for (int i = 0; i < height; i++){
+			res_row = res.ptr[i];
+			cur_row = ptr[i];
+			for (int k = 0; k < tr_mat.height; k++) {
+				tr_row = tr_mat.ptr[k];
+				res_row[k] = 0;
+				for (int j = 0; j < width; j++)
+					res_row[k] += cur_row[j] * tr_row[j];
+				}
+		}
+		if(stat != nullptr){
+				stat->add(t.get_stat_row());
+		}
+		return res;
+	}
 };
 
 
@@ -366,6 +399,7 @@ int main() {
 		m1.auto_vec_mul(m2,&stat);
 		m1.auto_vectless_mul(m2,&stat);
 		m1.manual_mul(m2,&stat);
+		m1.omp_mul(m2,&stat);
 		cout<<stat;
 	}
 	catch (runtime_error e) {
